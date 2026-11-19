@@ -23,6 +23,7 @@ import {
   rotatePage,
   validateFileSize,
   validatePdfHeader,
+  type DocumentSession,
 } from "../src/domain/entities/DocumentSession";
 import {
   mapDisplayToPdfPoint,
@@ -34,7 +35,7 @@ import { PdfLibEngineAdapter } from "../src/infrastructure/pdf/PdfLibEngineAdapt
 
 const NOW = "2026-11-18T12:00:00.000Z";
 
-function makeTestSession(pageCount = 3) {
+function makeTestSession(pageCount = 3): DocumentSession {
   const base = createEmptySession("sess-1", "Contrato Base.pdf", NOW);
   const pages: PageItem[] = Array.from({ length: pageCount }, (_, i) => ({
     id: `pg-${i + 1}`,
