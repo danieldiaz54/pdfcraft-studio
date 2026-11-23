@@ -33,6 +33,7 @@ import {
   renameSession,
   reorderPage,
   resetAllRotations,
+  resizeAnnotation,
   rotateAllPages,
   rotatePage,
   setActivePage,
@@ -43,6 +44,8 @@ import { PdfJsRendererAdapter } from "../../infrastructure/pdf/PdfJsRendererAdap
 import { PdfLibEngineAdapter } from "../../infrastructure/pdf/PdfLibEngineAdapter";
 import { IndexedDbDraftAdapter } from "../../infrastructure/storage/IndexedDbDraftAdapter";
 import type { WorkbenchTool } from "../components/TopChrome";
+
+export type SamplePreset = "sign" | "scan";
 
 export interface ToastNotice {
   readonly id: string;
@@ -74,7 +77,8 @@ export function usePdfWorkbench() {
     () => new Map(),
   );
   const [savedDraft, setSavedDraft] = useState<StoredDraftBundle | null>(null);
-  const [activeTool, setActiveTool] = useState<WorkbenchTool>("sign");
+  const [activeTool, setActiveToolState] = useState<WorkbenchTool>("sign");
+  const [mobileInspectorOpen, setMobileInspectorOpen] = useState<boolean>(false);
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(
     null,
   );
@@ -83,6 +87,15 @@ export function usePdfWorkbench() {
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [archOpen, setArchOpen] = useState<boolean>(false);
   const [toast, setToast] = useState<ToastNotice | null>(null);
+
+  const selectTool = useCallback((tool: WorkbenchTool) => {
+    setActiveToolState((prevTool) => {
+      setMobileInspectorOpen((wasOpen) =>
+        prevTool === tool ? !wasOpen : true,
+      );
+      return tool;
+    });
+  }, []);
 
   const showToast = useCallback(
     (tone: ToastNotice["tone"], message: string) => {
@@ -94,7 +107,7 @@ export function usePdfWorkbench() {
 
   useEffect(() => {
     if (!toast) return;
-    const timer = window.setTimeout(() => setToast(null), 4200);
+    const timer = window.setTimeout(() => setToast(null), 4000);
     return () => window.clearTimeout(timer);
   }, [toast]);
 
@@ -182,9 +195,10 @@ export function usePdfWorkbench() {
               ),
         );
         setSavedDraft(null);
+        setMobileInspectorOpen(false);
         showToast(
           "success",
-          `${outcome.addedPageCount} página(s) cargadas localmente.`,
+          `${outcome.addedPageCount} página(s) listas en tu navegador.`,
         );
       } catch (err) {
         showToast("error", toUserErrorMessage(err));
@@ -195,36 +209,61 @@ export function usePdfWorkbench() {
     [engine, session, sourceBuffers, showToast],
   );
 
-  const handleLoadSample = useCallback(async () => {
-    setIsBusy(true);
-    try {
-      const sampleBytes = await engine.buildSampleContractBytes();
-      const outcome = await loadAndAppendPdfFiles(
-        engine,
-        null,
-        new Map(),
-        [{ name: "Contrato_Servicios_2026.pdf", bytes: sampleBytes }],
-        () => makeId("sample"),
-        new Date().toISOString(),
-        1, // Land on Page 2 where signature lines live
-      );
-      setSourceBuffers(outcome.sourceBuffers);
-      setStack(
-        createCommandStack(
-          outcome.session,
-          "Cargar Contrato_Servicios_2026.pdf (4 págs)",
-        ),
-      );
-      setActiveTool("sign");
-      setSelectedAnnotationId(null);
-      setZoom(1);
-      setSavedDraft(null);
-    } catch (err) {
-      showToast("error", toUserErrorMessage(err));
-    } finally {
-      setIsBusy(false);
-    }
-  }, [engine, showToast]);
+  const handleLoadSample = useCallback(
+    async (preset: SamplePreset = "sign") => {
+      setIsBusy(true);
+      try {
+        const nowIso = new Date().toISOString();
+        const sampleBytes = await engine.buildSampleContractBytes();
+        const preferredIndex = preset === "scan" ? 0 : 1;
+        const outcome = await loadAndAppendPdfFiles(
+          engine,
+          null,
+          new Map(),
+          [{ name: "Contrato_Servicios_2026.pdf", bytes: sampleBytes }],
+          () => makeId("sample"),
+          nowIso,
+          preferredIndex,
+        );
+
+        let initialSession = outcome.session;
+        if (preset === "scan" && initialSession.pages[0]) {
+          initialSession = rotatePage(
+            initialSession,
+            initialSession.pages[0].id,
+            90,
+            nowIso,
+          );
+        }
+
+        setSourceBuffers(outcome.sourceBuffers);
+        setStack(
+          createCommandStack(
+            initialSession,
+            preset === "scan"
+              ? "Cargar escaneo con página girada (4 págs)"
+              : "Cargar Contrato_Servicios_2026.pdf (4 págs)",
+          ),
+        );
+        setActiveToolState(preset === "scan" ? "rotate" : "sign");
+        setMobileInspectorOpen(false);
+        setSelectedAnnotationId(null);
+        setZoom(1);
+        setSavedDraft(null);
+        if (preset === "scan") {
+          showToast(
+            "info",
+            "Página 1 cargada de lado: usa Girar 90° a la izquierda para enderezarla.",
+          );
+        }
+      } catch (err) {
+        showToast("error", toUserErrorMessage(err));
+      } finally {
+        setIsBusy(false);
+      }
+    },
+    [engine, showToast],
+  );
 
   const handleResumeDraft = useCallback(() => {
     if (!savedDraft) return;
@@ -234,8 +273,9 @@ export function usePdfWorkbench() {
     }
     setSourceBuffers(restoredBuffers);
     setStack(
-      createCommandStack(savedDraft.session, "Borrador recuperado de IndexedDB"),
+      createCommandStack(savedDraft.session, "Borrador recuperado localmente"),
     );
+    setMobileInspectorOpen(false);
     setSavedDraft(null);
   }, [savedDraft]);
 
@@ -248,6 +288,7 @@ export function usePdfWorkbench() {
     setStack(createCommandStack());
     setSourceBuffers(new Map());
     setSelectedAnnotationId(null);
+    setMobileInspectorOpen(false);
     setSavedDraft(null);
     draftStore.clearDraft().catch(() => {});
   }, [draftStore]);
@@ -261,6 +302,27 @@ export function usePdfWorkbench() {
     );
   }, []);
 
+  const handleStepPage = useCallback((delta: -1 | 1) => {
+    setSelectedAnnotationId(null);
+    setStack((prev) => {
+      if (!prev.present || prev.present.pages.length <= 1) return prev;
+      const curIdx = prev.present.activePageId
+        ? prev.present.pages.findIndex((p) => p.id === prev.present?.activePageId)
+        : 0;
+      const safeIdx = curIdx >= 0 ? curIdx : 0;
+      const nextIdx = Math.min(
+        prev.present.pages.length - 1,
+        Math.max(0, safeIdx + delta),
+      );
+      const target = prev.present.pages[nextIdx];
+      if (!target || target.id === prev.present.activePageId) return prev;
+      return replacePresentWithoutHistory(
+        prev,
+        setActivePage(prev.present, target.id),
+      );
+    });
+  }, []);
+
   const handleUndo = useCallback(() => {
     setSelectedAnnotationId(null);
     setStack((prev) => undoState(prev, makeId("log"), new Date().toISOString()));
@@ -271,7 +333,7 @@ export function usePdfWorkbench() {
     setStack((prev) => redoState(prev, makeId("log"), new Date().toISOString()));
   }, []);
 
-  // Keyboard shortcuts Ctrl/Cmd+Z and Ctrl/Cmd+Y
+  // Keyboard shortcuts Ctrl/Cmd+Z, Ctrl/Cmd+Y, and ArrowLeft/ArrowRight page navigation
   useEffect(() => {
     if (!session) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -285,21 +347,30 @@ export function usePdfWorkbench() {
         return;
       }
       const mod = event.ctrlKey || event.metaKey;
-      if (!mod) return;
-      if (event.key.toLowerCase() === "z" && !event.shiftKey) {
+      if (mod) {
+        if (event.key.toLowerCase() === "z" && !event.shiftKey) {
+          event.preventDefault();
+          handleUndo();
+        } else if (
+          event.key.toLowerCase() === "y" ||
+          (event.key.toLowerCase() === "z" && event.shiftKey)
+        ) {
+          event.preventDefault();
+          handleRedo();
+        }
+        return;
+      }
+      if (event.key === "ArrowLeft") {
         event.preventDefault();
-        handleUndo();
-      } else if (
-        event.key.toLowerCase() === "y" ||
-        (event.key.toLowerCase() === "z" && event.shiftKey)
-      ) {
+        handleStepPage(-1);
+      } else if (event.key === "ArrowRight") {
         event.preventDefault();
-        handleRedo();
+        handleStepPage(1);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [session, handleUndo, handleRedo]);
+  }, [session, handleUndo, handleRedo, handleStepPage]);
 
   const handlePlaceSignature = useCallback(
     (paths: ReadonlyArray<ReadonlyArray<SignaturePoint>>, inkColor: InkColor) => {
@@ -328,7 +399,8 @@ export function usePdfWorkbench() {
         "Insertar firma manuscrita",
       );
       setSelectedAnnotationId(id);
-      showToast("success", "Firma insertada. Arrástrala para ajustar posición.");
+      setMobileInspectorOpen(false);
+      showToast("success", "Firma estampada. Arrástrala o ajusta su esquina.");
     },
     [session, commitMutation, showToast],
   );
@@ -343,14 +415,15 @@ export function usePdfWorkbench() {
       }
       const id = makeId("txt");
       const targetPageId = session.activePageId;
+      const estimatedWidth = Math.min(0.56, Math.max(0.2, clean.length * 0.0135));
       const annotation: PageAnnotation = {
         id,
         kind: "text",
         pageId: targetPageId,
-        x: 0.56,
+        x: 0.54,
         y: 0.76,
-        width: Math.min(0.42, Math.max(0.18, clean.length * 0.011)),
-        height: 0.048,
+        width: estimatedWidth,
+        height: 0.055,
         text: clean,
         fontSizePt,
         inkColor,
@@ -360,7 +433,8 @@ export function usePdfWorkbench() {
         "Insertar anotación de texto",
       );
       setSelectedAnnotationId(id);
-      showToast("success", "Texto agregado. Arrástralo sobre la hoja para ubicarlo.");
+      setMobileInspectorOpen(false);
+      showToast("success", "Texto agregado. Arrástralo sobre la hoja.");
     },
     [session, commitMutation, showToast],
   );
@@ -398,12 +472,15 @@ export function usePdfWorkbench() {
     renderer,
     savedDraftTitle: savedDraft?.session.title ?? null,
     activeTool,
-    setActiveTool,
+    selectTool,
+    mobileInspectorOpen,
+    setMobileInspectorOpen,
     selectedAnnotationId,
     setSelectedAnnotationId,
     zoom,
     changeZoom: (delta: number) =>
       setZoom((z) => Math.min(1.6, Math.max(0.6, Number((z + delta).toFixed(2))))),
+    resetZoom: () => setZoom(1),
     isBusy,
     isExporting,
     archOpen,
@@ -419,17 +496,18 @@ export function usePdfWorkbench() {
     handleDiscardDraft,
     handleResetToWelcome,
     handleSelectPage,
+    handleStepPage,
     handleUndo,
     handleRedo,
     handleRename: (nextTitle: string) =>
       commitMutation(
         (cur, nowIso) => renameSession(cur, nextTitle, nowIso),
-        `Renombrar documento`,
+        "Renombrar documento",
       ),
     handleReorderPages: (fromIdx: number, toIdx: number) =>
       commitMutation(
         (cur, nowIso) => reorderPage(cur, fromIdx, toIdx, nowIso),
-        `Reordenar página ${fromIdx + 1} a posición ${toIdx + 1}`,
+        `Mover página ${fromIdx + 1} a posición ${toIdx + 1}`,
       ),
     handleMoveActivePage: (delta: -1 | 1) =>
       session?.activePageId
@@ -452,7 +530,7 @@ export function usePdfWorkbench() {
     handleResetRotations: () =>
       commitMutation(
         (cur, nowIso) => resetAllRotations(cur, nowIso),
-        "Restablecer orientación 0°",
+        "Restablecer orientación a 0°",
       ),
     handleDuplicateActivePage: () =>
       session?.activePageId
@@ -462,7 +540,7 @@ export function usePdfWorkbench() {
                 ? duplicatePage(
                     cur,
                     cur.activePageId,
-                    makeId("dup"),
+                    makeId("pg"),
                     makeId("ann"),
                     nowIso,
                   )
@@ -475,20 +553,25 @@ export function usePdfWorkbench() {
         (cur, nowIso) => deletePage(cur, pageId, nowIso),
         "Eliminar página",
       ),
-    handlePlaceSignature,
-    handlePlaceText,
     handleMoveAnnotation: (id: string, x: number, y: number) =>
       commitMutation(
         (cur, nowIso) => moveAnnotation(cur, id, x, y, nowIso),
-        "Ajustar posición de anotación",
+        "Mover elemento en página",
+      ),
+    handleResizeAnnotation: (id: string, width: number, height: number) =>
+      commitMutation(
+        (cur, nowIso) => resizeAnnotation(cur, id, width, height, nowIso),
+        "Redimensionar elemento en página",
       ),
     handleRemoveAnnotation: (id: string) => {
       setSelectedAnnotationId(null);
       commitMutation(
         (cur, nowIso) => removeAnnotation(cur, id, nowIso),
-        "Quitar anotación",
+        "Quitar elemento de la página",
       );
     },
+    handlePlaceSignature,
+    handlePlaceText,
     handleDownload,
   };
 }

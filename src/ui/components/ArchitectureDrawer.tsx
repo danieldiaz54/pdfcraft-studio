@@ -19,13 +19,18 @@ export function ArchitectureDrawer({
 }: ArchitectureDrawerProps) {
   useEffect(() => {
     if (!isOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         onClose();
       }
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
   }, [isOpen, onClose]);
 
   if (!isOpen) {
@@ -42,13 +47,18 @@ export function ArchitectureDrawer({
     >
       <div className="pc-drawer" onClick={(e) => e.stopPropagation()}>
         <div className="pc-drawer-header">
-          <h2 id="pc-arch-drawer-title" className="pc-inspector-title" style={{ margin: 0 }}>
-            Arquitectura Hexagonal Local-First
-          </h2>
+          <div>
+            <h2 id="pc-arch-drawer-title" className="pc-inspector-title">
+              Cómo funciona por dentro
+            </h2>
+            <p className="pc-drawer-sub">
+              Arquitectura Hexagonal Local-First · Cero servidores
+            </p>
+          </div>
           <button
             type="button"
             className="pc-pill-btn"
-            aria-label="Cerrar panel de arquitectura"
+            aria-label="Cerrar panel informativo"
             onClick={onClose}
           >
             <CloseIcon />
@@ -56,53 +66,57 @@ export function ArchitectureDrawer({
         </div>
 
         <div className="pc-drawer-body">
-          <div className="pc-arch-box" style={{ backgroundColor: "#F0FDF4", borderColor: "#BBF7D0" }}>
-            <h3 style={{ display: "flex", alignItems: "center", gap: "8px", color: "#15803D" }}>
+          <div className="pc-arch-box pc-arch-box-verified">
+            <h3 className="pc-arch-verified-title">
               <ShieldIcon />
-              Aislamiento de privacidad verificado
+              <span>Privacidad verificable en red</span>
             </h3>
-            <p style={{ color: "#166534" }}>
-              Datos enviados a servidores externos:{" "}
-              <strong className="pc-meta-mono" style={{ color: "#15803D" }}>0 KB</strong>. Todo el
-              análisis binario, firma vectorial y exportación ocurre en la memoria de tu navegador.
+            <p className="pc-arch-verified-copy">
+              Tráfico enviado a servidores externos:{" "}
+              <strong className="pc-meta-mono">0 KB</strong>. La lectura de páginas, el
+              trazo de firma vectorial y la compilación del PDF final ocurren
+              íntegramente en la memoria local de tu navegador.
             </p>
           </div>
 
           <div className="pc-arch-box">
-            <h3>1. Núcleo de Dominio Puro (src/domain)</h3>
+            <h3>Núcleo de dominio puro (src/domain)</h3>
             <p>
-              Modelos inmutables (DocumentSession, PageItem, Annotation) y pila Undo/Redo sin
-              dependencias de React, DOM ni librerías PDF. Estado actual:{" "}
+              Entidades inmutables (<code>DocumentSession</code>, <code>PageItem</code>,{" "}
+              <code>Annotation</code>) y pila <code>EditCommandStack</code> sin
+              dependencias de React, DOM ni librerías PDF. Sesión activa:{" "}
               <span className="pc-meta-mono">
-                {pageCount} págs · {annotationCount} anotaciones
+                {pageCount} págs · {annotationCount} elementos
               </span>
               .
             </p>
           </div>
 
           <div className="pc-arch-box">
-            <h3>2. Puertos y Adaptadores (src/application · infrastructure)</h3>
+            <h3>Puertos y adaptadores (src/application · infrastructure)</h3>
             <p>
-              PdfEnginePort conecta con <strong>pdf-lib</strong> (edición y firma vectorial) y{" "}
-              <strong>pdfjs-dist</strong> (worker local empaquetado). DraftStorePort persiste
-              borradores privados en <strong>IndexedDB</strong>.
+              <code>PdfEnginePort</code> compila binarios reales con{" "}
+              <strong>pdf-lib</strong> y renderiza vistas HiDPI mediante{" "}
+              <strong>pdfjs-dist</strong> (worker local empaquetado).{" "}
+              <code>DraftStorePort</code> guarda borradores privados en{" "}
+              <strong>IndexedDB</strong>.
             </p>
           </div>
 
           <div>
-            <h3 className="pc-inspector-title" style={{ fontSize: "14px", marginBottom: "8px" }}>
-              Historial de Comandos (Undo / Redo)
+            <h3 className="pc-drawer-section-heading">
+              Bitácora de comandos en memoria (Undo / Redo)
             </h3>
             {commandLog.length === 0 ? (
-              <p className="pc-inspector-desc" style={{ marginBottom: 0 }}>
-                Carga o edita un documento para observar las instantáneas inmutables en memoria.
+              <p className="pc-inspector-desc">
+                Abre o edita un documento para inspeccionar cada transición inmutable.
               </p>
             ) : (
               <ul className="pc-log-list">
                 {commandLog.slice(0, 12).map((entry) => (
                   <li key={entry.id} className="pc-log-item">
                     <span>{entry.label}</span>
-                    <span className="pc-meta-mono" style={{ color: "#64748b" }}>
+                    <span className="pc-meta-mono pc-log-time">
                       {entry.timestampIso.slice(11, 19)}
                     </span>
                   </li>
@@ -115,10 +129,9 @@ export function ArchitectureDrawer({
             href="https://github.com/danieldiaz54/pdfcraft-studio"
             target="_blank"
             rel="noreferrer"
-            className="pc-btn-secondary"
-            style={{ textDecoration: "none" }}
+            className="pc-btn-secondary pc-drawer-repo-link"
           >
-            Ver código fuente y ADRs en GitHub
+            Ver código fuente y ADR en GitHub
           </a>
         </div>
       </div>

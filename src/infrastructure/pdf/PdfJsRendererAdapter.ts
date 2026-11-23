@@ -4,6 +4,7 @@ import type { PdfRenderPort } from "../../application/ports/PdfEnginePort";
 import { normalizeRotation, type RotationAngle } from "../../domain/entities/PageItem";
 
 let workerConfigured = false;
+const canvasQueues = new WeakMap<HTMLCanvasElement, Promise<void>>();
 
 function ensureWorker(): void {
   if (!workerConfigured) {
@@ -14,7 +15,30 @@ function ensureWorker(): void {
 
 /** Local Canvas renderer powered by pdfjs-dist v4 bundled worker (zero external CDN requests). */
 export class PdfJsRendererAdapter implements PdfRenderPort {
-  public async renderPageToCanvas(
+  public renderPageToCanvas(
+    bytes: Uint8Array,
+    sourcePageIndex: number,
+    canvas: HTMLCanvasElement,
+    targetWidthPx: number,
+    extraCwRotation: RotationAngle,
+  ): Promise<void> {
+    const previous = canvasQueues.get(canvas) ?? Promise.resolve();
+    const next = previous
+      .catch(() => undefined)
+      .then(() =>
+        this.performRender(
+          bytes,
+          sourcePageIndex,
+          canvas,
+          targetWidthPx,
+          extraCwRotation,
+        ),
+      );
+    canvasQueues.set(canvas, next);
+    return next;
+  }
+
+  private async performRender(
     bytes: Uint8Array,
     sourcePageIndex: number,
     canvas: HTMLCanvasElement,

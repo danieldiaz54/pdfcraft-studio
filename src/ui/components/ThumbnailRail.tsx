@@ -1,19 +1,31 @@
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import type { PdfRenderPort } from "../../application/ports/PdfEnginePort";
 import type { PageItem } from "../../domain/entities/PageItem";
-import { PlusIcon, RotateCwIcon, TrashIcon } from "./Icons";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  PlusIcon,
+  RotateCwIcon,
+  TrashIcon,
+} from "./Icons";
 
 interface ThumbnailTileProps {
   readonly page: PageItem;
   readonly index: number;
   readonly totalPages: number;
   readonly isActive: boolean;
+  readonly isDragging: boolean;
+  readonly isDropTarget: boolean;
   readonly sourceBytes: Uint8Array | undefined;
   readonly renderer: PdfRenderPort;
   readonly onSelect: () => void;
+  readonly onMoveUp: () => void;
+  readonly onMoveDown: () => void;
   readonly onRotate: () => void;
   readonly onDelete: () => void;
   readonly onDragStartIndex: (index: number) => void;
+  readonly onDragEnterIndex: (index: number) => void;
+  readonly onDragEndAll: () => void;
   readonly onDropOnIndex: (targetIndex: number) => void;
 }
 
@@ -22,12 +34,18 @@ function ThumbnailTile({
   index,
   totalPages,
   isActive,
+  isDragging,
+  isDropTarget,
   sourceBytes,
   renderer,
   onSelect,
+  onMoveUp,
+  onMoveDown,
   onRotate,
   onDelete,
   onDragStartIndex,
+  onDragEnterIndex,
+  onDragEndAll,
   onDropOnIndex,
 }: ThumbnailTileProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -38,10 +56,10 @@ function ThumbnailTile({
 
     let cancelled = false;
     renderer
-      .renderPageToCanvas(sourceBytes, page.sourcePageIndex, canvas, 120, page.rotation)
+      .renderPageToCanvas(sourceBytes, page.sourcePageIndex, canvas, 128, page.rotation)
       .catch(() => {
         if (!cancelled) {
-          // Ignore cancellation/unmount noise during fast reorders
+          // Ignore superseded renders during rapid page reorder
         }
       });
 
@@ -52,6 +70,7 @@ function ThumbnailTile({
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
+    onDragEnterIndex(index);
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -62,9 +81,12 @@ function ThumbnailTile({
   return (
     <div
       className="pc-thumb-item"
+      data-dragging={isDragging}
+      data-drop-target={isDropTarget}
       draggable
       onDragStart={() => onDragStartIndex(index)}
       onDragOver={handleDragOver}
+      onDragEnd={onDragEndAll}
       onDrop={handleDrop}
     >
       <div
@@ -84,7 +106,37 @@ function ThumbnailTile({
       >
         <canvas ref={canvasRef} className="pc-thumb-canvas" />
 
+        {page.rotation !== 0 ? (
+          <span className="pc-thumb-rot-badge">{page.rotation}°</span>
+        ) : null}
+
         <div className="pc-thumb-actions">
+          <button
+            type="button"
+            className="pc-mini-icon-btn pc-hide-mobile"
+            title={`Subir página ${index + 1}`}
+            aria-label={`Subir página ${index + 1}`}
+            disabled={index === 0}
+            onClick={(e) => {
+              e.stopPropagation();
+              onMoveUp();
+            }}
+          >
+            <ArrowUpIcon width={12} height={12} />
+          </button>
+          <button
+            type="button"
+            className="pc-mini-icon-btn pc-hide-mobile"
+            title={`Bajar página ${index + 1}`}
+            aria-label={`Bajar página ${index + 1}`}
+            disabled={index >= totalPages - 1}
+            onClick={(e) => {
+              e.stopPropagation();
+              onMoveDown();
+            }}
+          >
+            <ArrowDownIcon width={12} height={12} />
+          </button>
           <button
             type="button"
             className="pc-mini-icon-btn"
@@ -99,7 +151,7 @@ function ThumbnailTile({
           </button>
           <button
             type="button"
-            className="pc-mini-icon-btn"
+            className="pc-mini-icon-btn pc-mini-danger"
             title={`Eliminar página ${index + 1}`}
             aria-label={`Eliminar página ${index + 1}`}
             disabled={totalPages <= 1}
@@ -142,13 +194,19 @@ export function ThumbnailRail({
   onAppendPdfFiles,
 }: ThumbnailRailProps) {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
   const addInputRef = useRef<HTMLInputElement | null>(null);
+
+  const clearDrag = () => {
+    setDraggedIndex(null);
+    setDropTargetIndex(null);
+  };
 
   const handleDropOnIndex = (targetIndex: number) => {
     if (draggedIndex !== null && draggedIndex !== targetIndex) {
       onReorderPages(draggedIndex, targetIndex);
     }
-    setDraggedIndex(null);
+    clearDrag();
   };
 
   const handleFileInput = (event: ChangeEvent<HTMLInputElement>) => {
@@ -160,6 +218,16 @@ export function ThumbnailRail({
 
   return (
     <aside className="pc-rail" aria-label="Miniaturas de páginas">
+      <input
+        ref={addInputRef}
+        type="file"
+        accept="application/pdf,.pdf"
+        multiple
+        className="sr-only"
+        aria-label="Agregar archivo PDF"
+        onChange={handleFileInput}
+      />
+
       <div className="pc-rail-list">
         {pages.map((page, index) => (
           <ThumbnailTile
@@ -168,27 +236,41 @@ export function ThumbnailRail({
             index={index}
             totalPages={pages.length}
             isActive={page.id === activePageId}
+            isDragging={draggedIndex === index}
+            isDropTarget={
+              dropTargetIndex === index &&
+              draggedIndex !== null &&
+              draggedIndex !== index
+            }
             sourceBytes={sourceBuffers.get(page.sourceDocId)}
             renderer={renderer}
             onSelect={() => onSelectPage(page.id)}
+            onMoveUp={() => onReorderPages(index, index - 1)}
+            onMoveDown={() => onReorderPages(index, index + 1)}
             onRotate={() => onRotatePage(page.id)}
             onDelete={() => onDeletePage(page.id)}
-            onDragStartIndex={setDraggedIndex}
+            onDragStartIndex={(idx) => {
+              setDraggedIndex(idx);
+              setDropTargetIndex(idx);
+            }}
+            onDragEnterIndex={setDropTargetIndex}
+            onDragEndAll={clearDrag}
             onDropOnIndex={handleDropOnIndex}
           />
         ))}
+
+        <button
+          type="button"
+          className="pc-thumb-add-inline"
+          aria-label="Agregar otro PDF"
+          onClick={() => addInputRef.current?.click()}
+        >
+          <PlusIcon />
+          <span>PDF</span>
+        </button>
       </div>
 
       <div className="pc-rail-footer">
-        <input
-          ref={addInputRef}
-          type="file"
-          accept="application/pdf,.pdf"
-          multiple
-          className="sr-only"
-          aria-label="Agregar archivo PDF"
-          onChange={handleFileInput}
-        />
         <button
           type="button"
           className="pc-btn-secondary"
