@@ -1544,27 +1544,29 @@
 /* ---------- Mobile Precision Ergonomics (<= 768px) ---------- */
 @media (max-width: 768px) {
   .pc-topbar {
-    min-height: 52px;
+    min-height: 48px;
     padding: 8px 12px;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
   }
 
-  .pc-filename-input {
-    width: 122px;
-    max-width: 34vw;
-    font-size: 12.5px;
-    padding: 4px 6px;
-  }
-
+  .pc-topbar-sep,
+  .pc-filename-form,
   .pc-doc-count-badge,
   .pc-local-sep,
   .pc-local-how {
     display: none;
   }
 
+  .pc-local-trigger {
+    min-height: 32px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+
   .pc-btn-primary {
-    padding: 0 11px;
+    min-height: 34px;
+    padding: 0 12px;
     font-size: 12.5px;
   }
 
@@ -1578,9 +1580,9 @@
   .pc-tool-btn {
     flex: 1 0 auto;
     justify-content: center;
-    padding: 6px 9px;
-    min-height: 36px;
-    font-size: 12.5px;
+    padding: 5px 8px;
+    min-height: 34px;
+    font-size: 12px;
   }
 
   .pc-welcome-main {
@@ -1666,12 +1668,17 @@
 
   .pc-stage {
     flex: 1;
-    padding: 14px 12px 74px;
+    padding: 14px 12px 116px;
   }
 
   .pc-floating-pill {
+    position: fixed;
+    left: 50%;
+    bottom: 12px;
+    transform: translateX(-50%);
     padding: 4px 8px;
     gap: 2px;
+    z-index: 22;
   }
 
   .pc-mobile-tool-fab {
@@ -1680,18 +1687,24 @@
     gap: 7px;
     position: fixed;
     right: 14px;
-    bottom: 66px;
+    bottom: 62px;
     z-index: 25;
-    min-height: 40px;
+    min-height: 38px;
     padding: 0 14px;
     border-radius: 9999px;
     border: 1px solid var(--accent-cobalt);
     background-color: var(--accent-cobalt);
     color: #ffffff;
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 600;
     box-shadow: 0 8px 20px -4px rgba(29, 78, 216, 0.48);
     cursor: pointer;
+  }
+
+  .pc-toast {
+    top: auto;
+    bottom: 110px;
+    max-width: calc(100vw - 24px);
   }
 
   .pc-inspector {
