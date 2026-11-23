@@ -42,8 +42,9 @@
    - Barra flotante inferior compacta: `Deshacer`, `Rehacer`, `- 100% +`, `Página 2 de 4`.
 4. **Right Contextual Inspector (`260px`, `#FFFFFF`, `border-left: 1px solid #E2E8F0`, máximo 4 controles visibles por estado):**
    - Muestra únicamente herramientas de la pestaña activa (ej. en `Firmar`: lienzo de firma manuscrita, selector de tinta `#111827` / `#1D4ED8`, botón `"Limpiar"` y botón `"Insertar en página"`).
-5. **Welcome / Dropzone Empty State (`#F8FAFC`):**
-   - Sin columnas SaaS repetitivas. Una única zona central blanca con borde punteado `#CBD5E1`, ilustración geométrica lineal limpia de hojas de papel, título editorial claro, botón primario `"Seleccionar archivos PDF"`, botón secundario `"Probar con contrato de ejemplo (4 págs)"` y franja inferior discreta (`Reordenar y unir`, `Firmar y anotar`, `0 KB enviados a la red`).
+5. **Welcome / Prepress Split Hero (`#F8FAFC` + `#EAEEF2`):**
+   - Grilla asimétrica de dos columnas sin tarjetas SaaS repetitivas: a la izquierda, titular claro en `Bricolage Grotesque`, bandeja de selección/arrastre con dos escenarios en 1 clic (*"Contrato listo para firmar"* y *"Escaneo de lado para corregir"*) y garantías verificables (`0 KB enviados a internet`); a la derecha, espécimen físico A4 interactivo sobre mesa de luz `#EAEEF2` con marcas de corte en las esquinas y firma cobalto animada.
+   - En móvil (`<= 768px`), la hoja A4 escala automáticamente al ancho disponible mediante `ResizeObserver` (`0px` de recorte horizontal) y el inspector contextual opera como bandeja inferior colapsable (`data-mobile-open`).
 
 ## 5. Motion Philosophy & Interaction States
 - Transiciones rápidas táctiles de escritorio (`150ms–200ms`, `cubic-bezier(0.22, 1, 0.36, 1)`) en selección de herramientas y rotación visual.

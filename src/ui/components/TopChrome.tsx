@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import {
   BrandDocIcon,
+  DownloadDocIcon,
   MergeDocsIcon,
   OrganizeIcon,
   PenSignIcon,
@@ -12,7 +13,9 @@ export type WorkbenchTool = "organize" | "rotate" | "sign" | "text" | "merge";
 
 interface TopChromeProps {
   readonly title: string;
+  readonly pageCount: number;
   readonly activeTool: WorkbenchTool;
+  readonly mobileInspectorOpen: boolean;
   readonly isExporting: boolean;
   readonly onResetToWelcome: () => void;
   readonly onRename: (nextTitle: string) => void;
@@ -35,7 +38,9 @@ const TOOLS: ReadonlyArray<{
 
 export function TopChrome({
   title,
+  pageCount,
   activeTool,
+  mobileInspectorOpen,
   isExporting,
   onResetToWelcome,
   onRename,
@@ -64,12 +69,12 @@ export function TopChrome({
   };
 
   return (
-    <header className="pc-topbar">
+    <header className="pc-topbar pc-topbar-workbench">
       <div className="pc-brand-group">
         <button
           type="button"
           className="pc-brand-btn"
-          title="Volver al inicio o cargar otro documento"
+          title="Cerrar documento actual y volver al inicio"
           onClick={onResetToWelcome}
         >
           <span className="pc-brand-mark">
@@ -80,7 +85,7 @@ export function TopChrome({
 
         <span className="pc-topbar-sep" aria-hidden="true" />
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="pc-filename-form">
           <label htmlFor="pc-doc-filename" className="sr-only">
             Nombre del archivo de salida
           </label>
@@ -92,43 +97,51 @@ export function TopChrome({
             onBlur={commitTitle}
           />
         </form>
+
+        <span className="pc-doc-count-badge" aria-label={`${pageCount} páginas`}>
+          {pageCount}p
+        </span>
       </div>
 
       <nav className="pc-tool-strip" aria-label="Herramientas de edición PDF">
-        {TOOLS.map((tool) => (
-          <button
-            key={tool.id}
-            type="button"
-            className="pc-tool-btn"
-            data-active={activeTool === tool.id}
-            aria-pressed={activeTool === tool.id}
-            onClick={() => onSelectTool(tool.id)}
-          >
-            {tool.renderIcon()}
-            <span>{tool.label}</span>
-          </button>
-        ))}
+        {TOOLS.map((tool) => {
+          const isActive = activeTool === tool.id;
+          return (
+            <button
+              key={tool.id}
+              type="button"
+              className="pc-tool-btn"
+              data-active={isActive}
+              data-mobile-open={isActive && mobileInspectorOpen}
+              aria-pressed={isActive}
+              onClick={() => onSelectTool(tool.id)}
+            >
+              {tool.renderIcon()}
+              <span>{tool.label}</span>
+            </button>
+          );
+        })}
       </nav>
 
       <div className="pc-actions-group">
-        <span className="pc-local-pill">
-          <span className="pc-local-dot" />
-          100% local
-        </span>
+        <button
+          type="button"
+          className="pc-local-trigger pc-local-trigger-compact"
+          onClick={onOpenArchitecture}
+          title="Ver arquitectura Local-First e historial de cambios"
+        >
+          <span className="pc-local-dot" aria-hidden="true" />
+          <span className="pc-local-label-full">0 KB · Cómo funciona</span>
+          <span className="pc-local-label-short">Info</span>
+        </button>
         <button
           type="button"
           className="pc-btn-primary"
           disabled={isExporting}
           onClick={onDownload}
         >
-          {isExporting ? "Generando PDF..." : "Descargar PDF"}
-        </button>
-        <button
-          type="button"
-          className="pc-btn-secondary"
-          onClick={onOpenArchitecture}
-        >
-          Arquitectura
+          <DownloadDocIcon />
+          <span>{isExporting ? "Generando..." : "Descargar PDF"}</span>
         </button>
       </div>
     </header>
