@@ -79,11 +79,22 @@ class TestPdfCraftArchitectureAndAntiSlop(unittest.TestCase):
             "PRODUCT.md",
             "DESIGN.md",
             ".specs/01-domain/pdfcraft-product-and-architecture.spec.md",
+            ".specs/02-ux/v2-prepress-light-table-ux.spec.md",
             ".specs/04-security/security-audit-report.spec.md",
             "docs/adr/001-hexagonal-local-first-pdf-pipeline.md",
         ]
         for rel in required_files:
             self.assertTrue((REPO_ROOT / rel).is_file(), f"Missing {rel}")
+
+        canvas_src = (REPO_ROOT / "src" / "ui" / "components" / "DocumentCanvas.tsx").read_text(
+            encoding="utf-8"
+        )
+        welcome_src = (REPO_ROOT / "src" / "ui" / "components" / "EmptyDropzone.tsx").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("ResizeObserver", canvas_src)
+        self.assertIn("onResizeAnnotation", canvas_src)
+        self.assertIn("pc-specimen-stage", welcome_src)
 
 
 if __name__ == "__main__":

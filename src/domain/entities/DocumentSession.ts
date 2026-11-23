@@ -303,6 +303,29 @@ export function moveAnnotation(
   return { ...session, annotations, updatedAtIso: nowIso };
 }
 
+/** Resize an existing annotation cleanly inside [0, 1] page bounds. */
+export function resizeAnnotation(
+  session: DocumentSession,
+  annotationId: string,
+  nextWidth: number,
+  nextHeight: number,
+  nowIso: string,
+): DocumentSession {
+  const annotations = session.annotations.map((ann) => {
+    if (ann.id !== annotationId) {
+      return ann;
+    }
+    const clamped = clampNormalizedBox({
+      x: ann.x,
+      y: ann.y,
+      width: nextWidth,
+      height: nextHeight,
+    });
+    return { ...ann, ...clamped };
+  });
+  return { ...session, annotations, updatedAtIso: nowIso };
+}
+
 /** Remove an annotation by ID. */
 export function removeAnnotation(
   session: DocumentSession,

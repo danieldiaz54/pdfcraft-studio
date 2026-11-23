@@ -2,7 +2,15 @@ import { useEffect, useRef, useState, type PointerEvent } from "react";
 import type { PdfRenderPort } from "../../application/ports/PdfEnginePort";
 import type { PageAnnotation } from "../../domain/entities/Annotation";
 import { getEffectivePageSize, type PageItem } from "../../domain/entities/PageItem";
-import { CloseIcon, MinusIcon, PlusIcon, RedoIcon, UndoIcon } from "./Icons";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CloseIcon,
+  MinusIcon,
+  PlusIcon,
+  RedoIcon,
+  UndoIcon,
+} from "./Icons";
 
 interface DocumentCanvasProps {
   readonly page: PageItem;
@@ -17,20 +25,28 @@ interface DocumentCanvasProps {
   readonly canRedoAction: boolean;
   readonly onSelectAnnotation: (id: string | null) => void;
   readonly onMoveAnnotation: (id: string, x: number, y: number) => void;
+  readonly onResizeAnnotation: (id: string, width: number, height: number) => void;
   readonly onRemoveAnnotation: (id: string) => void;
+  readonly onStepPage: (delta: -1 | 1) => void;
   readonly onUndo: () => void;
   readonly onRedo: () => void;
   readonly onZoomChange: (delta: number) => void;
+  readonly onResetZoom: () => void;
 }
 
-interface DragState {
+interface InteractionState {
+  readonly mode: "move" | "resize";
   readonly id: string;
   readonly startClientX: number;
   readonly startClientY: number;
   readonly initialX: number;
   readonly initialY: number;
+  readonly initialWidth: number;
+  readonly initialHeight: number;
   readonly currentX: number;
   readonly currentY: number;
+  readonly currentWidth: number;
+  readonly currentHeight: number;
 }
 
 export function DocumentCanvas({
@@ -46,20 +62,49 @@ export function DocumentCanvas({
   canRedoAction,
   onSelectAnnotation,
   onMoveAnnotation,
+  onResizeAnnotation,
   onRemoveAnnotation,
+  onStepPage,
   onUndo,
   onRedo,
   onZoomChange,
+  onResetZoom,
 }: DocumentCanvasProps) {
+  const stageRef = useRef<HTMLElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
-  const [dragState, setDragState] = useState<DragState | null>(null);
+  const [stageFitWidth, setStageFitWidth] = useState<number>(560);
+  const [interaction, setInteraction] = useState<InteractionState | null>(null);
+
+  // Dynamically measure available stage width so mobile (390px) fits 100% cleanly without horizontal clipping
+  useEffect(() => {
+    const stageEl = stageRef.current;
+    if (!stageEl) return;
+
+    const computeFitWidth = () => {
+      const clientW = stageEl.clientWidth;
+      if (clientW <= 0) return;
+      const horizontalPad = clientW <= 768 ? 24 : 64;
+      const available = Math.max(240, clientW - horizontalPad);
+      setStageFitWidth(Math.min(580, available));
+    };
+
+    computeFitWidth();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", computeFitWidth);
+      return () => window.removeEventListener("resize", computeFitWidth);
+    }
+
+    const observer = new ResizeObserver(() => computeFitWidth());
+    observer.observe(stageEl);
+    return () => observer.disconnect();
+  }, []);
 
   const effectiveSize = getEffectivePageSize(page);
-  const baseWidthPx = Math.round(560 * zoom);
   const aspectRatio = effectiveSize.heightPt / Math.max(1, effectiveSize.widthPt);
-  const displayWidthPx = baseWidthPx;
-  const displayHeightPx = Math.round(baseWidthPx * aspectRatio);
+  const displayWidthPx = Math.round(stageFitWidth * zoom);
+  const displayHeightPx = Math.round(displayWidthPx * aspectRatio);
+  const pdfScaleRatio = displayWidthPx / Math.max(1, effectiveSize.widthPt);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -76,7 +121,7 @@ export function DocumentCanvas({
       )
       .catch(() => {
         if (!cancelled) {
-          // Ignore superseded renders when flipping pages quickly
+          // Ignore superseded renders when flipping pages or zooming rapidly
         }
       });
 
@@ -92,151 +137,238 @@ export function DocumentCanvas({
     renderer,
   ]);
 
-  const startDrag = (
+  const startMove = (
     event: PointerEvent<HTMLDivElement>,
     ann: PageAnnotation,
   ) => {
     event.stopPropagation();
     onSelectAnnotation(ann.id);
     event.currentTarget.setPointerCapture(event.pointerId);
-    setDragState({
+    setInteraction({
+      mode: "move",
       id: ann.id,
       startClientX: event.clientX,
       startClientY: event.clientY,
       initialX: ann.x,
       initialY: ann.y,
+      initialWidth: ann.width,
+      initialHeight: ann.height,
       currentX: ann.x,
       currentY: ann.y,
+      currentWidth: ann.width,
+      currentHeight: ann.height,
     });
   };
 
-  const handleDragMove = (event: PointerEvent<HTMLDivElement>) => {
-    if (!dragState || !frameRef.current) return;
+  const startResize = (
+    event: PointerEvent<HTMLButtonElement>,
+    ann: PageAnnotation,
+  ) => {
+    event.stopPropagation();
+    onSelectAnnotation(ann.id);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setInteraction({
+      mode: "resize",
+      id: ann.id,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      initialX: ann.x,
+      initialY: ann.y,
+      initialWidth: ann.width,
+      initialHeight: ann.height,
+      currentX: ann.x,
+      currentY: ann.y,
+      currentWidth: ann.width,
+      currentHeight: ann.height,
+    });
+  };
+
+  const handlePointerMove = (event: PointerEvent<HTMLElement>) => {
+    if (!interaction || !frameRef.current) return;
     const rect = frameRef.current.getBoundingClientRect();
-    const dx = (event.clientX - dragState.startClientX) / Math.max(1, rect.width);
-    const dy = (event.clientY - dragState.startClientY) / Math.max(1, rect.height);
-    setDragState({
-      ...dragState,
-      currentX: Math.min(0.92, Math.max(0.01, dragState.initialX + dx)),
-      currentY: Math.min(0.92, Math.max(0.01, dragState.initialY + dy)),
-    });
+    const dx = (event.clientX - interaction.startClientX) / Math.max(1, rect.width);
+    const dy = (event.clientY - interaction.startClientY) / Math.max(1, rect.height);
+
+    if (interaction.mode === "move") {
+      setInteraction({
+        ...interaction,
+        currentX: Math.min(
+          1 - interaction.initialWidth,
+          Math.max(0.01, interaction.initialX + dx),
+        ),
+        currentY: Math.min(
+          1 - interaction.initialHeight,
+          Math.max(0.01, interaction.initialY + dy),
+        ),
+      });
+    } else {
+      setInteraction({
+        ...interaction,
+        currentWidth: Math.min(
+          0.9 - interaction.initialX,
+          Math.max(0.08, interaction.initialWidth + dx),
+        ),
+        currentHeight: Math.min(
+          0.45,
+          Math.max(0.04, interaction.initialHeight + dy),
+        ),
+      });
+    }
   };
 
-  const endDrag = () => {
-    if (!dragState) return;
-    if (
-      Math.abs(dragState.currentX - dragState.initialX) > 0.002 ||
-      Math.abs(dragState.currentY - dragState.initialY) > 0.002
+  const endInteraction = () => {
+    if (!interaction) return;
+    if (interaction.mode === "move") {
+      if (
+        Math.abs(interaction.currentX - interaction.initialX) > 0.002 ||
+        Math.abs(interaction.currentY - interaction.initialY) > 0.002
+      ) {
+        onMoveAnnotation(
+          interaction.id,
+          interaction.currentX,
+          interaction.currentY,
+        );
+      }
+    } else if (
+      Math.abs(interaction.currentWidth - interaction.initialWidth) > 0.004 ||
+      Math.abs(interaction.currentHeight - interaction.initialHeight) > 0.004
     ) {
-      onMoveAnnotation(dragState.id, dragState.currentX, dragState.currentY);
+      onResizeAnnotation(
+        interaction.id,
+        interaction.currentWidth,
+        interaction.currentHeight,
+      );
     }
-    setDragState(null);
+    setInteraction(null);
   };
 
   return (
     <section
+      ref={stageRef}
       className="pc-stage"
       aria-label="Mesa de edición del documento PDF"
       onClick={() => onSelectAnnotation(null)}
     >
-      <div
-        ref={frameRef}
-        className="pc-sheet-frame"
-        style={{
-          width: `${displayWidthPx}px`,
-          height: `${displayHeightPx}px`,
-        }}
-      >
-        <canvas ref={canvasRef} className="pc-sheet-canvas" />
+      <div className="pc-stage-canvas-wrap">
+        <div
+          ref={frameRef}
+          className="pc-sheet-frame"
+          style={{
+            width: `${displayWidthPx}px`,
+            height: `${displayHeightPx}px`,
+          }}
+        >
+          <canvas ref={canvasRef} className="pc-sheet-canvas" />
 
-        {annotations.map((ann) => {
-          const isBeingDragged = dragState?.id === ann.id;
-          const leftPct = (isBeingDragged ? dragState.currentX : ann.x) * 100;
-          const topPct = (isBeingDragged ? dragState.currentY : ann.y) * 100;
-          const isSelected = selectedAnnotationId === ann.id;
+          {annotations.map((ann) => {
+            const isInteracting = interaction?.id === ann.id;
+            const leftPct = (isInteracting ? interaction.currentX : ann.x) * 100;
+            const topPct = (isInteracting ? interaction.currentY : ann.y) * 100;
+            const widthPct =
+              (isInteracting ? interaction.currentWidth : ann.width) * 100;
+            const heightPct =
+              (isInteracting ? interaction.currentHeight : ann.height) * 100;
+            const isSelected = selectedAnnotationId === ann.id;
 
-          return (
-            <div
-              key={ann.id}
-              className="pc-overlay-item"
-              data-selected={isSelected}
-              style={{
-                left: `${leftPct}%`,
-                top: `${topPct}%`,
-                width: `${ann.width * 100}%`,
-                height: `${ann.height * 100}%`,
-              }}
-              onPointerDown={(e) => startDrag(e, ann)}
-              onPointerMove={handleDragMove}
-              onPointerUp={endDrag}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {ann.kind === "signature" ? (
-                <svg
-                  viewBox="0 0 100 100"
-                  preserveAspectRatio="none"
-                  width="100%"
-                  height="100%"
-                >
-                  {ann.paths.map((stroke, sIdx) => {
-                    const d = stroke
-                      .map(
-                        (pt, pIdx) =>
-                          `${pIdx === 0 ? "M" : "L"}${(pt.x * 100).toFixed(2)} ${(pt.y * 100).toFixed(2)}`,
-                      )
-                      .join(" ");
-                    return (
-                      <path
-                        key={sIdx}
-                        d={d}
-                        fill="none"
-                        stroke={ann.inkColor}
-                        strokeWidth="2.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        vectorEffect="non-scaling-stroke"
+            return (
+              <div
+                key={ann.id}
+                className="pc-overlay-item"
+                data-selected={isSelected}
+                data-kind={ann.kind}
+                style={{
+                  left: `${leftPct}%`,
+                  top: `${topPct}%`,
+                  width: ann.kind === "signature" ? `${widthPct}%` : "auto",
+                  minWidth: ann.kind === "text" ? `${widthPct}%` : undefined,
+                  height: ann.kind === "signature" ? `${heightPct}%` : "auto",
+                }}
+                onPointerDown={(e) => startMove(e, ann)}
+                onPointerMove={handlePointerMove}
+                onPointerUp={endInteraction}
+                onPointerCancel={endInteraction}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {ann.kind === "signature" ? (
+                  <svg
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                    width="100%"
+                    height="100%"
+                  >
+                    {ann.paths.map((stroke, sIdx) => {
+                      const d = stroke
+                        .map(
+                          (pt, pIdx) =>
+                            `${pIdx === 0 ? "M" : "L"}${(pt.x * 100).toFixed(2)} ${(pt.y * 100).toFixed(2)}`,
+                        )
+                        .join(" ");
+                      return (
+                        <path
+                          key={sIdx}
+                          d={d}
+                          fill="none"
+                          stroke={ann.inkColor}
+                          strokeWidth="2.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      );
+                    })}
+                  </svg>
+                ) : (
+                  <div
+                    className="pc-overlay-text"
+                    style={{
+                      color: ann.inkColor,
+                      fontSize: `${Math.max(10, Math.round(ann.fontSizePt * pdfScaleRatio))}px`,
+                    }}
+                  >
+                    {ann.text}
+                  </div>
+                )}
+
+                {isSelected ? (
+                  <>
+                    <button
+                      type="button"
+                      className="pc-overlay-remove"
+                      aria-label="Quitar elemento de la página"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveAnnotation(ann.id);
+                      }}
+                    >
+                      <CloseIcon width={12} height={12} />
+                    </button>
+
+                    {ann.kind === "signature" ? (
+                      <button
+                        type="button"
+                        className="pc-overlay-resize"
+                        title="Arrastra para cambiar el tamaño de la firma"
+                        aria-label="Redimensionar firma"
+                        onPointerDown={(e) => startResize(e, ann)}
+                        onPointerMove={handlePointerMove}
+                        onPointerUp={endInteraction}
+                        onPointerCancel={endInteraction}
+                        onClick={(e) => e.stopPropagation()}
                       />
-                    );
-                  })}
-                </svg>
-              ) : (
-                <div
-                  style={{
-                    color: ann.inkColor,
-                    fontSize: `${Math.round(ann.fontSizePt * zoom)}px`,
-                    fontWeight: 600,
-                    lineHeight: 1.2,
-                    padding: "2px 4px",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {ann.text}
-                </div>
-              )}
-
-              {isSelected ? (
-                <button
-                  type="button"
-                  className="pc-overlay-remove"
-                  aria-label="Quitar anotación de la página"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRemoveAnnotation(ann.id);
-                  }}
-                >
-                  <CloseIcon />
-                </button>
-              ) : null}
-            </div>
-          );
-        })}
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div
         className="pc-floating-pill"
         role="toolbar"
-        aria-label="Controles de historial y zoom"
+        aria-label="Controles de historial, zoom y páginas"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -271,7 +403,14 @@ export function DocumentCanvas({
         >
           <MinusIcon />
         </button>
-        <span className="pc-pill-mono">{Math.round(zoom * 100)}%</span>
+        <button
+          type="button"
+          className="pc-pill-zoom-reset"
+          title="Restablecer zoom al 100%"
+          onClick={onResetZoom}
+        >
+          {Math.round(zoom * 100)}%
+        </button>
         <button
           type="button"
           className="pc-pill-btn"
@@ -284,9 +423,29 @@ export function DocumentCanvas({
 
         <span className="pc-pill-divider" aria-hidden="true" />
 
+        <button
+          type="button"
+          className="pc-pill-btn"
+          disabled={pageNumber <= 1}
+          title="Página anterior (Flecha izquierda)"
+          aria-label="Página anterior"
+          onClick={() => onStepPage(-1)}
+        >
+          <ChevronLeftIcon />
+        </button>
         <span className="pc-pill-mono">
-          Pág. {pageNumber} / {totalPages}
+          {pageNumber} / {totalPages}
         </span>
+        <button
+          type="button"
+          className="pc-pill-btn"
+          disabled={pageNumber >= totalPages}
+          title="Página siguiente (Flecha derecha)"
+          aria-label="Página siguiente"
+          onClick={() => onStepPage(1)}
+        >
+          <ChevronRightIcon />
+        </button>
       </div>
     </section>
   );

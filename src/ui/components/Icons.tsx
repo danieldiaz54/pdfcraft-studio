@@ -103,6 +103,66 @@ export function MinusIcon(props: IconProps) {
   );
 }
 
+export function ChevronLeftIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+  );
+}
+
+export function ChevronRightIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  );
+}
+
+export function ChevronDownIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
+export function ArrowUpIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="m18 15-6-6-6 6" />
+    </svg>
+  );
+}
+
+export function ArrowDownIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
+export function UploadDocIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="M12 16V4" />
+      <path d="m7 9 5-5 5 5" />
+      <path d="M20 16v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3" />
+    </svg>
+  );
+}
+
+export function DownloadDocIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="M12 4v12" />
+      <path d="m7 11 5 5 5-5" />
+      <path d="M20 17v3H4v-3" />
+    </svg>
+  );
+}
+
 export function TrashIcon(props: IconProps) {
   return (
     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
@@ -124,56 +184,8 @@ export function CloseIcon(props: IconProps) {
 
 export function ShieldIcon(props: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    </svg>
-  );
-}
-
-/** Crisp technical line-art vector illustration of overlapping A4 documents matching the approved welcome comp. */
-export function WelcomeSheetsIllustration() {
-  return (
-    <svg
-      viewBox="0 0 140 126"
-      width="116"
-      height="104"
-      fill="none"
-      aria-hidden="true"
-    >
-      {/* Back sheet offset in Cobalt linework */}
-      <rect
-        x="22"
-        y="22"
-        width="76"
-        height="96"
-        rx="2"
-        fill="#EFF6FF"
-        stroke="#1D4ED8"
-        strokeWidth="1.6"
-      />
-      {/* Front A4 document with folded corner */}
-      <path
-        d="M36 10h54l22 22v76H36V10Z"
-        fill="#FFFFFF"
-        stroke="#111827"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M90 10v22h22"
-        fill="#F8FAFC"
-        stroke="#111827"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      {/* Technical document text lines */}
-      <line x1="48" y1="26" x2="72" y2="26" stroke="#1D4ED8" strokeWidth="2.2" strokeLinecap="round" />
-      <line x1="48" y1="44" x2="98" y2="44" stroke="#94A3B8" strokeWidth="1.6" strokeLinecap="round" />
-      <line x1="48" y1="53" x2="98" y2="53" stroke="#94A3B8" strokeWidth="1.6" strokeLinecap="round" />
-      <line x1="48" y1="62" x2="90" y2="62" stroke="#94A3B8" strokeWidth="1.6" strokeLinecap="round" />
-      <line x1="48" y1="71" x2="96" y2="71" stroke="#94A3B8" strokeWidth="1.6" strokeLinecap="round" />
-      {/* Signature rule */}
-      <line x1="48" y1="90" x2="74" y2="90" stroke="#1D4ED8" strokeWidth="1.9" strokeLinecap="round" />
     </svg>
   );
 }

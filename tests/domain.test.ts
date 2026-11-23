@@ -20,6 +20,7 @@ import {
   deletePage,
   duplicatePage,
   reorderPage,
+  resizeAnnotation,
   rotatePage,
   validateFileSize,
   validatePdfHeader,
@@ -132,6 +133,38 @@ describe("Hexagonal Domain & PdfLib Integration", () => {
         ],
       ]),
     ).not.toThrow();
+  });
+
+  it("resizes annotations within clamped page bounds", () => {
+    let session = makeTestSession(1);
+    session = addAnnotation(
+      session,
+      {
+        id: "sig-resize",
+        kind: "signature",
+        pageId: "pg-1",
+        x: 0.2,
+        y: 0.65,
+        width: 0.24,
+        height: 0.09,
+        inkColor: "#1D4ED8",
+        paths: [
+          [
+            { x: 0.1, y: 0.7 },
+            { x: 0.9, y: 0.4 },
+          ],
+        ],
+      },
+      NOW,
+    );
+    session = resizeAnnotation(session, "sig-resize", 0.4, 0.14, NOW);
+    expect(session.annotations[0]?.width).toBeCloseTo(0.4, 4);
+    expect(session.annotations[0]?.height).toBeCloseTo(0.14, 4);
+
+    // Clamps excessive dimensions safely inside page [0, 1]
+    session = resizeAnnotation(session, "sig-resize", 2.0, 0.95, NOW);
+    expect(session.annotations[0]?.width).toBeLessThanOrEqual(0.9);
+    expect(session.annotations[0]?.height).toBeLessThanOrEqual(0.45);
   });
 
   it("builds the 4-page sample contract, stamps signature + text, and exports valid PDF", async () => {
